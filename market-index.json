@@ -62,7 +62,7 @@
           "source": {
             "type": "git",
             "url": "https://github.com/chen7911012012-code/dsh-qq-bot",
-            "commit": "0000000000000000000000000000000000000000"
+            "commit": "ded26cae39943e83c20183ee752530dec830f584"
           }
         },
         {
@@ -74,7 +74,7 @@
           "source": {
             "type": "git",
             "url": "https://github.com/chen7911012012-code/dsh-qq-bot",
-            "commit": "bf4ec8f0e4ba2a3a33b4ce063e836da6d8ac0032"
+            "commit": "ded26cae39943e83c20183ee752530dec830f584"
           }
         }
       ]
