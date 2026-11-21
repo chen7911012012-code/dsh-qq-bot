@@ -14,7 +14,10 @@
         replyChunkSize: 1500
         allowedTools: []
         groupAnyone: true
+        quoteContext: true
         owner: ''
+        repo: 'chen7911012012-code/dsh-qq-bot'
+        creatorMode: false
         napcatInstallDir: ''
         napcatPort: 3001
         groupSessionTools:
