@@ -1,0 +1,67 @@
+{
+  "format": 1,
+  "title": {
+    "en": "DSH QQ bot bridge",
+    "zh": "DSH QQ 机器人桥接"
+  },
+  "description": {
+    "en": "Plugin index for dsh-qq-bot: a QQ bot bridge for DeepSeek Harness over OneBot v11 (NapCat).",
+    "zh": "dsh-qq-bot 的插件索引：基于 OneBot v11（NapCat）的 DeepSeek Harness QQ 机器人桥接。"
+  },
+  "metadata": {
+    "categories": {
+      "chat": {
+        "title": {
+          "en": "Chat bridges",
+          "zh": "聊天桥接"
+        }
+      }
+    },
+    "labels": {
+      "onebot": {
+        "title": {
+          "en": "OneBot v11",
+          "zh": "OneBot v11"
+        }
+      }
+    },
+    "sortKeys": {}
+  },
+  "plugins": [
+    {
+      "name": "dsh-qq-bot",
+      "title": {
+        "en": "QQ bot bridge",
+        "zh": "QQ 机器人桥接"
+      },
+      "description": {
+        "en": "Connects a QQ bot through OneBot v11 (NapCat) and gives every QQ user or group its own persistent DeepSeek Harness session.",
+        "zh": "通过 OneBot v11（NapCat）接入 QQ 机器人，每个 QQ 用户或群聊对应一个独立的、可持久化的 DeepSeek Harness 会话。"
+      },
+      "icon": "icon.svg",
+      "author": "dywmmt",
+      "homepage": "https://github.com/chen7911012012-code/dsh-qq-bot",
+      "repository": {
+        "url": "https://github.com/chen7911012012-code/dsh-qq-bot"
+      },
+      "metadata": {
+        "category": "chat",
+        "keywords": ["qq", "qqbot", "onebot", "napcat", "bot"]
+      },
+      "versions": [
+        {
+          "version": "1.1.0",
+          "publishTimestamp": 1795240000,
+          "engines": {
+            "dsh": ">=0.2.2-rc.1"
+          },
+          "source": {
+            "type": "git",
+            "url": "https://github.com/chen7911012012-code/dsh-qq-bot",
+            "commit": "0000000000000000000000000000000000000000"
+          }
+        }
+      ]
+    }
+  ]
+}
