@@ -10,6 +10,7 @@
 - 为机器人会话挂载 DSH **代理预设**（默认使用 profile 的默认预设，通常是 `standard`），工具能力与网页端会话一致。
 - 回复只取本轮最后一段助手文本，按 `replyChunkSize`（默认 1500 字）分条发送；群聊会 @ 提问者。
 - 把 NapCat 提供的图片和文件下载到 `<工作目录>/qq-media/`，并把本地路径交给模型读取。
+- **引用消息**：群里 @ 机器人并「回复」一条消息时，插件会读取被引用的那条消息（文字、图片、文件），一并交给模型 —— 所以「@机器人 这张图里是什么」直接引用图片即可。
 - 工具授权转发到 QQ：`/y` 允许本次调用，`/n` 拒绝；`approvalMode` 也支持 `allow-all` 与 `deny-all`。
 - 一轮超过 `progressNoticeSeconds`（默认 12 秒）时先发一条「正在处理」提示。
 
@@ -25,6 +26,9 @@
 | `/reload` | 释放并重新从磁盘加载当前会话。仅主人。 |
 | `/stop` | 打断当前回合。仅主人。 |
 | `/id` | 查看当前 DSH 会话 id。 |
+| `/update` | 检查 GitHub 上有没有新版本。仅主人。 |
+| `/update apply` | 下载并安装新版本（走 DSH 插件管理器）。仅主人。 |
+| `/publish <说明>` | 升版本、提交并发布新版本到 GitHub。**仅创作者模式**，仅主人。 |
 | `/y`、`/n` | 同意或拒绝待处理的工具授权。 |
 
 ## 主人
@@ -76,6 +80,7 @@
     replyChunkSize: 1500
     allowedTools: []
     groupAnyone: true
+    quoteContext: true
     owner: '123456789'
     napcatInstallDir: ''
     napcatPort: 3001
@@ -104,7 +109,10 @@ profile 补丁改动要重启 Harness 才生效。插件另外读取 `<profile>/
 | `allowedUsers` | `[]` | 未设置 `owner` 时允许的 QQ 号；为空表示所有人。 |
 | `allowedGroups` | `[]` | 允许应答的群号；为空表示所有群。 |
 | `groupAnyone` | `true` | `true` 时任何群成员 @ 即可提问；`false` 时仅主人可问。 |
+| `quoteContext` | `true` | 是否读取被引用的消息（文字/图片/文件）并作为上下文。 |
 | `owner` | `''` | 机器人主人 QQ 号：私聊与管理命令。为空时退回 `allowedUsers`。 |
+| `repo` | `chen7911012012-code/dsh-qq-bot` | 更新检查与发布使用的 GitHub 仓库。 |
+| `creatorMode` | `false` | 创作者模式：注册 `qqbot_publish_release` 工具、启用以 `/publish`。普通用户保持关闭。 |
 | `groupSessionTools` | 只读工具集 | 群会话的工具白名单，避免开放群里写文件、执行命令；为空则不做限制。 |
 | `groupMentionRequired` | `true` | 群聊必须 @ 机器人才应答。 |
 | `approvalMode` | `ask-qq` | `ask-qq` 在 QQ 里询问，`allow-all` 全放行，`deny-all` 全拒绝。 |
@@ -117,6 +125,17 @@ profile 补丁改动要重启 Harness 才生效。插件另外读取 `<profile>/
 | `approvalTimeoutSeconds` | `180` | 授权请求的有效期。 |
 | `napcatInstallDir` | `''` | 一键安装的目标目录；为空表示 `%USERPROFILE%\NapCat`。 |
 | `napcatPort` | `3001` | 一键安装写入 NapCat 配置的端口。 |
+
+## 检查更新与创作者模式
+
+插件自带两个面向使用者的能力：
+
+- 代理工具 `qqbot_check_update`：读取 GitHub 最新 Release，比较本地版本，返回是否有更新、更新说明与链接。
+- 代理工具 `qqbot_apply_update`：把最新版本解析成固定 commit 的 Git 安装参数，交给 DSH 插件管理器安装；不可用时返回可手动执行的安装参数。
+
+QQ 里对应 `/update` 与 `/update apply`，都只有主人可用。
+
+**创作者模式**（`creatorMode: true`）额外注册 `qqbot_publish_release` 工具并开放 `/publish`：升版本、写更新记录、更新市场索引、提交并打 Release。普通用户默认 `false`，看不到发布相关工具与命令。
 
 ## 发布与更新
 
