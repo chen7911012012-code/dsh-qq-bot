@@ -30,7 +30,7 @@ const SKIP = new Set(['.git', 'node_modules', 'publish', '.github-token', '.dsh-
 /** Files that belong in the repository. */
 const INCLUDE = [
   'index.js', 'impl.js', 'onebot.js', 'cordis.patch.yml', 'icon.svg', 'README.md',
-  'package.json', 'LICENSE', 'CHANGELOG.md', 'market-index.json', '安装NapCat.cmd',
+  'package.json', 'LICENSE', 'CHANGELOG.md', 'market-index.json', '安装NapCat.cmd', 'AGENTS.md',
   'docs', 'locale', 'tools',
 ]
 
@@ -40,7 +40,7 @@ function fail(message, code = 1) {
 }
 
 function parseArgs(argv) {
-  const options = { repo: '', message: '', token: '', dryRun: false, del: false }
+  const options = { repo: '', message: '', token: '', dryRun: false, del: false, release: false }
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
     if (arg === '--repo') options.repo = argv[++index] ?? ''
@@ -48,8 +48,9 @@ function parseArgs(argv) {
     else if (arg === '--token') options.token = argv[++index] ?? ''
     else if (arg === '--dry-run') options.dryRun = true
     else if (arg === '--delete') options.del = true
+    else if (arg === '--release') options.release = true
     else if (arg === '--help' || arg === '-h') {
-      console.log('node tools/publish-github.mjs --repo owner/name [--message text] [--dry-run] [--delete]')
+      console.log('node tools/publish-github.mjs --repo owner/name [--message text] [--release] [--dry-run] [--delete]')
       process.exit(0)
     } else fail(`unknown argument: ${arg}`, 2)
   }
@@ -89,8 +90,22 @@ async function request(token, method, url, body) {
   return payload
 }
 
-/** Collect files to publish, as repo-relative POSIX paths. */
-function collect() {
+/**
+ * Take the Markdown body of one version section out of a changelog.
+ * @param markdown - full changelog.
+ * @param version - version whose section is returned.
+ * @returns the section text without its heading, or an empty string.
+ */
+function changelogSection(markdown, version) {
+  const lines = markdown.split(/\r?\n/u)
+  const start = lines.findIndex((line) => line.startsWith(`## ${version}`))
+  if (start === -1) return ''
+  const rest = lines.slice(start + 1)
+  const end = rest.findIndex((line) => line.startsWith('## '))
+  return (end === -1 ? rest : rest.slice(0, end)).join('\n').trim()
+}
+
+/** Collect files to publish, as repo-relative POSIX paths. */function collect() {
   const files = []
   const walk = (relative) => {
     const absolute = path.join(ROOT, relative)
@@ -231,6 +246,28 @@ async function main() {
         branch: 'main',
       })
       console.log(`deleted ${entry.path}`)
+    }
+  }
+
+  if (options.release && !options.dryRun) {
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
+    const tag = `v${pkg.version}`
+    const changelogPath = path.join(ROOT, 'CHANGELOG.md')
+    const changelog = fs.existsSync(changelogPath) ? fs.readFileSync(changelogPath, 'utf8') : ''
+    const body = changelogSection(changelog, pkg.version) || `dsh-qq-bot ${pkg.version}`
+    try {
+      const head = await request(token, 'GET', `/repos/${owner}/${name}/commits/main`)
+      await request(token, 'POST', `/repos/${owner}/${name}/releases`, {
+        tag_name: tag,
+        target_commitish: head.sha,
+        name: `${pkg.name} ${tag}`,
+        body,
+        draft: false,
+        prerelease: false,
+      })
+      console.log(`release created: ${tag}`)
+    } catch (error) {
+      console.warn(`warning: could not create release ${tag}: ${error.message}`)
     }
   }
 
