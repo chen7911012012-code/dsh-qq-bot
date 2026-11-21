@@ -13,8 +13,10 @@ QQ <-> NapCat（OneBot v11 正向 WebSocket）<-> dsh-qq-bot <-> DSH 代理 + �
 - **群聊开放问答** —— 任何群成员 @ 机器人都能提问；群会话只给只读工具，陌生人无法写文件或执行命令。
 - **一键安装 NapCat** —— 代理工具 `qqbot_install_napcat` 或双击 `安装NapCat.cmd`：下载 NapCat、写入 OneBot 配置、注册登录自启计划任务并启动。
 - **在 QQ 里授权** —— `/y` 允许本次工具调用，`/n` 拒绝；超时无人应答按拒绝处理。
-- **图片与文件** —— 自动下载到 `<工作目录>/qq-media/`，把路径交给模型读取。
-- **命令** —— `/help`、`/owner`、`/new`、`/status`、`/reload`、`/stop`、`/id`、`/y`、`/n`。
+- **图片与文件** —— 自动下载到 `<工作目录>/qq-media/`，把路径交给模型读取。群里 @ 机器人并**引用**一条图片/文件消息，也会读取被引用的那条。
+- **在线更新** —— `qqbot_check_update` / `/update` 检查 GitHub 新版本，`qqbot_apply_update` / `/update apply` 一键安装。
+- **创作者模式** —— `creatorMode: true` 时才注册 `qqbot_publish_release` 与 `/publish`，普通用户看不到发布入口。
+- **命令** —— `/help`、`/owner`、`/new`、`/status`、`/update`、`/reload`、`/stop`、`/id`、`/y`、`/n`。
 
 ## 安装
 
