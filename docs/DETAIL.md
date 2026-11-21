@@ -1,64 +1,64 @@
-# QQ bot bridge
+# QQ 机器人桥接
 
-Connects a QQ bot to DeepSeek Harness through **OneBot v11** (NapCat, go-cqhttp, Lagrange). Every QQ private chat or group gets its own persistent DSH session, so a conversation in QQ is an ordinary session that also appears in the Harness session list.
+把 QQ 机器人接到 DeepSeek Harness：通过 **OneBot v11**（NapCat / go-cqhttp / Lagrange），每个 QQ 私聊或群聊对应一个独立的、可持久化的 DSH 会话。QQ 里的对话就是普通 DSH 会话，网页端也能看到同一份记录。
 
-## What it does
+## 它做什么
 
-- Connects to a OneBot v11 **forward WebSocket** endpoint (default `ws://127.0.0.1:3001`) and reconnects automatically with backoff.
-- Maps each chat to a DSH session: `qq-private-<QQ号>-<时间戳>` or `qq-group-<群号>-<时间戳>`. The mapping is stored in `.qq-bot/state.json` in the profile directory.
-- Creates the session on the first message, resumes it from disk after a restart or after the idle timeout, and disposes idle agents (default 30 minutes) so memory is freed while history stays on disk.
-- Mounts a DSH **agent preset** for the bot's sessions (default: the profile's default preset, normally `standard`), so the bot has the same tools a Web session has.
-- Replies with the assistant's final text of the turn, split into chat-sized chunks (default 1500 characters), and @-mentions the sender in groups.
-- Downloads images and files that NapCat serves into `<workdir>/qq-media/` and tells the assistant the local path, so it can read them with its own tools.
-- Forwards tool approval requests to the QQ chat: `/y` allows the call once, `/n` rejects it. Group and private chats are handled the same way.
-- Sends a progress notice when a turn runs longer than `progressNoticeSeconds` (default 12 seconds).
+- 连接 OneBot v11 **正向 WebSocket**（默认 `ws://127.0.0.1:3001`），断线自动重连、退避。
+- 每个聊天映射到一个 DSH 会话：`qq-private-<QQ号>-<时间戳>` 或 `qq-group-<群号>-<时间戳>`，映射关系存在 profile 目录的 `.qq-bot/state.json`。
+- 首条消息建会话，重启或空闲超时后从磁盘恢复；默认空闲 30 分钟释放代理，历史仍在磁盘上。
+- 为机器人会话挂载 DSH **代理预设**（默认使用 profile 的默认预设，通常是 `standard`），工具能力与网页端会话一致。
+- 回复只取本轮最后一段助手文本，按 `replyChunkSize`（默认 1500 字）分条发送；群聊会 @ 提问者。
+- 把 NapCat 提供的图片和文件下载到 `<工作目录>/qq-media/`，并把本地路径交给模型读取。
+- 工具授权转发到 QQ：`/y` 允许本次调用，`/n` 拒绝；`approvalMode` 也支持 `allow-all` 与 `deny-all`。
+- 一轮超过 `progressNoticeSeconds`（默认 12 秒）时先发一条「正在处理」提示。
 
-## Commands
+## 命令
 
-| Command | Effect |
+| 命令 | 作用 |
 |---|---|
-| `/help` | List the commands. |
-| `/owner` | Show the current owner. |
-| `/owner <QQ号>` | Set the owner; private chat only, and only the current owner may replace one. |
-| `/new` | Start a new conversation; the previous session stays in the Harness session list. Owner only. |
-| `/status` | Connection, workdir, session id, busy state, model, preset, approval mode, owner. Owner only. |
-| `/reload` | Dispose the live agent and reload the session from disk. Owner only. |
-| `/stop` | Cancel the turn that is currently running. Owner only. |
-| `/id` | Show the current DSH session id. |
-| `/y`, `/n` | Answer a pending tool approval request. |
+| `/help` | 列出命令。 |
+| `/owner` | 查看当前主人。 |
+| `/owner <QQ号>` | 设置主人；仅限私聊，且只有当前主人能更换。 |
+| `/new` | 开新会话，旧会话保留在 DSH 列表。仅主人。 |
+| `/status` | 连接、工作目录、会话 id、忙碌状态、模型、预设、授权模式、主人。仅主人。 |
+| `/reload` | 释放并重新从磁盘加载当前会话。仅主人。 |
+| `/stop` | 打断当前回合。仅主人。 |
+| `/id` | 查看当前 DSH 会话 id。 |
+| `/y`、`/n` | 同意或拒绝待处理的工具授权。 |
 
-## Owner
+## 主人
 
-Once `owner` is set (or `/owner <QQ号>` is used in private chat), that account owns the bot:
+设置 `owner`（或私聊发 `/owner <QQ号>`）后，该账号拥有机器人：
 
-- Private chat answers only the owner; every other private sender is ignored.
-- Admin commands (`/new`, `/status`, `/reload`, `/stop`) accept the owner only; other users get a refusal.
-- Groups keep working for everyone when `groupAnyone` is on, but their sessions stay read-only, so a stranger cannot write files or run commands.
+- 私聊只回应主人，其他人私聊直接忽略。
+- 管理命令（`/new`、`/status`、`/reload`、`/stop`）只有主人能用，其他人会收到拒绝提示。
+- 开启 `groupAnyone` 时群聊仍对所有人开放，但群会话只给只读工具，陌生人无法写文件或执行命令。
 
-With `owner` empty, the plugin falls back to `allowedUsers` (empty means everyone), which is the pre-1.1 behaviour.
+`owner` 为空时退回 `allowedUsers`（为空表示所有人可用），与 1.1 之前的行为一致。
 
-## One-click NapCat install
+## 一键安装 NapCat
 
-Two entry points run the same installer:
+两个入口跑同一套安装逻辑：
 
-| Entry point | Use |
+| 入口 | 用法 |
 |---|---|
-| Agent tool `qqbot_install_napcat` | Ask the Harness to install or repair NapCat; arguments: `port`, `account`, `installDir`, `force`. |
-| `安装NapCat.cmd` in the package | Double-click on Windows; prompts for elevation. |
+| 代理工具 `qqbot_install_napcat` | 让 Harness 安装或修复 NapCat；参数 `port`、`account`、`installDir`、`force`。 |
+| 包内 `安装NapCat.cmd` | Windows 双击运行，自动请求提权。 |
 
-The installer downloads NapCat Shell, extracts it (default `%USERPROFILE%\NapCat`), writes the OneBot v11 forward WebSocket config, registers the `NapCat-Bridge` scheduled task (logon trigger, 45 s delay, highest privileges), removes the conflicting plain-QQ autostart entry, and starts NapCat. Re-running it reuses an existing installation unless `force` is set.
+安装脚本会：下载 NapCat Shell、解压（默认 `%USERPROFILE%\NapCat`）、写入 OneBot v11 正向 WebSocket 配置、注册 `NapCat-Bridge` 计划任务（登录触发、延迟 45 秒、最高权限）、删除会抢占登录的普通 QQ 自启项、并启动 NapCat。重复运行会复用已有安装，除非指定 `force`。
 
-## Setting up NapCat manually
+## 手动配置 NapCat
 
-1. Install and start NapCat, then log in with the QQ account that should act as the bot.
-2. In NapCat's network settings add a **WebSocket server** entry on port `3001` (this is the OneBot v11 *forward* WebSocket: NapCat listens and the bridge connects to it). If you enable a token, put the same token in `accessToken`.
-3. Keep the Harness running. The bridge log reports `connected`, and a message to the bot then produces a reply.
+1. 安装并启动 NapCat，用要当机器人的 QQ 号登录。
+2. 在网络配置里添加端口 `3001` 的 **WebSocket 服务器**（OneBot v11 正向 WebSocket：NapCat 监听，插件连接）。若设置了 token，把它填进 `accessToken`。
+3. 保持 Harness 运行。桥接日志出现 `connected` 后，给机器人发消息即可。
 
-Reverse WebSocket, HTTP-only and Satori transports are not implemented; the bridge is a WebSocket client only.
+不支持反向 WebSocket、纯 HTTP 和 Satori；本插件只作为 WebSocket 客户端。
 
-## Configuration
+## 配置
 
-The plugin row `qq-bot` carries its configuration. The bundle's own default lives in its `cordis.patch.yml`; to change a value, add a row to the profile's `cordis.patch.yml` and restart the Harness:
+配置由 profile 中 `qq-bot` 这一行承载，默认值在本包的 `cordis.patch.yml`。修改方式是在 profile 的 `cordis.patch.yml` 里加一行再重启 Harness：
 
 ```yaml
 - id: qq-bot
@@ -84,60 +84,58 @@ The plugin row `qq-bot` carries its configuration. The bundle's own default live
     preset: ''
 ```
 
-A row override replaces the whole `config`, so repeat every field you want to keep.
+行覆盖会整体替换 `config`，要保留的字段都得重写一遍。
 
-### Live overrides without a restart
+### 无需重启的覆盖
 
-A profile patch change only takes effect after the Harness restarts. For faster edits, the plugin also reads `<profile>/.qq-bot/override.json`, whose fields win over the row config for every key it names:
+profile 补丁改动要重启 Harness 才生效。插件另外读取 `<profile>/.qq-bot/override.json`，其中的字段优先于行配置：
 
 ```json
-{ "allowedUsers": ["3645411938"], "allowedGroups": [], "groupAnyone": true }
+{ "allowedUsers": ["3645411938"], "allowedGroups": [], "groupAnyone": true, "owner": "3645411938" }
 ```
 
-Save the file, then disable and re-enable the plugin row in the Plugin Manager to apply it. The file is optional; a missing or malformed file falls back to the row config.
+保存后在「插件」里把该插件关掉再打开即可生效。文件可缺省，缺失或格式错误时回退到行配置。
 
-
-| Field | Default | Meaning |
+| 字段 | 默认值 | 含义 |
 |---|---|---|
-| `wsUrl` | `ws://127.0.0.1:3001` | OneBot v11 forward WebSocket endpoint. |
-| `accessToken` | `''` | Token sent as `access_token` in the query string. |
-| `workdir` | `<profile>/qq-workspace` | Session working directory, created when missing. |
-| `allowedUsers` | `[]` | QQ numbers allowed when no `owner` is set; empty allows everyone. |
-| `allowedGroups` | `[]` | Group numbers the bot answers in; empty allows every group. |
-| `groupAnyone` | `true` | `true` lets any group member @ the bot and get an answer; `false` limits group questions to the owner. |
-| `owner` | `''` | QQ number that owns the bot: private chat, admin commands. Empty falls back to `allowedUsers`. |
-| `napcatInstallDir` | `''` | Installer target; empty means `%USERPROFILE%\NapCat`. |
-| `groupSessionTools` | read-only set | Tool allowlist for group sessions, so open group questions cannot write files or run commands. Empty keeps every tool. |
-| `groupMentionRequired` | `true` | Only answer group messages that @ the bot. |
-| `approvalMode` | `ask-qq` | `ask-qq` asks in the chat, `allow-all` allows every request, `deny-all` rejects every request. |
-| `idleTimeoutMinutes` | `30` | Idle minutes before the agent is disposed. |
-| `progressNoticeSeconds` | `12` | Delay before a "working" notice; `0` disables it. |
-| `replyChunkSize` | `1500` | Maximum characters per outgoing QQ message. |
-| `allowedTools` | `[]` | Tool allowlist for bot agents; empty keeps every tool. |
-| `provider`, `model` | `''` | Pin a route; empty follows the DSH default model. |
-| `preset` | `''` | Agent preset for bot sessions; empty uses the profile default. |
-| `approvalTimeoutSeconds` | `180` | How long an approval question stays open. |
-| `napcatPort` | `3001` | Port the one-click installer writes into NapCat's OneBot config. |
+| `wsUrl` | `ws://127.0.0.1:3001` | OneBot v11 正向 WebSocket 地址。 |
+| `accessToken` | `''` | 以 `access_token` 查询参数发送的 token。 |
+| `workdir` | `<profile>/qq-workspace` | 会话工作目录，不存在时创建。 |
+| `allowedUsers` | `[]` | 未设置 `owner` 时允许的 QQ 号；为空表示所有人。 |
+| `allowedGroups` | `[]` | 允许应答的群号；为空表示所有群。 |
+| `groupAnyone` | `true` | `true` 时任何群成员 @ 即可提问；`false` 时仅主人可问。 |
+| `owner` | `''` | 机器人主人 QQ 号：私聊与管理命令。为空时退回 `allowedUsers`。 |
+| `groupSessionTools` | 只读工具集 | 群会话的工具白名单，避免开放群里写文件、执行命令；为空则不做限制。 |
+| `groupMentionRequired` | `true` | 群聊必须 @ 机器人才应答。 |
+| `approvalMode` | `ask-qq` | `ask-qq` 在 QQ 里询问，`allow-all` 全放行，`deny-all` 全拒绝。 |
+| `idleTimeoutMinutes` | `30` | 空闲多少分钟释放代理。 |
+| `progressNoticeSeconds` | `12` | 多久后发「正在处理」提示；`0` 关闭。 |
+| `replyChunkSize` | `1500` | 单条 QQ 消息最大字数。 |
+| `allowedTools` | `[]` | 机器人代理的工具白名单；为空表示全部。 |
+| `provider`、`model` | `''` | 固定模型路由；为空跟随 DSH 默认。 |
+| `preset` | `''` | 机器人会话使用的代理预设；为空用默认预设。 |
+| `approvalTimeoutSeconds` | `180` | 授权请求的有效期。 |
+| `napcatInstallDir` | `''` | 一键安装的目标目录；为空表示 `%USERPROFILE%\NapCat`。 |
+| `napcatPort` | `3001` | 一键安装写入 NapCat 配置的端口。 |
 
-## Publishing and updates
+## 发布与更新
 
-The repository mirrors this bundle, and `tools/publish-github.mjs` keeps it in sync through the GitHub REST API — no git installation needed:
+仓库镜像本包。**每次改动都要同步发布**，一条命令完成升版本、写更新记录、更新市场索引、提交并打 release：
 
 ```powershell
-$env:GITHUB_TOKEN = '<personal access token with repo scope>'
-node tools/publish-github.mjs --repo owner/dsh-qq-bot --message "release: 1.1.0"
+node tools/release.mjs --repo chen7911012012-code/dsh-qq-bot --bump patch --note "本次改了什么"
 ```
 
-It creates the repository when missing, uploads only changed files, optionally deletes files that are gone (`--delete`), and re-pins every Git entry in `market-index.json` to the commit it just produced. The token is read from `--token`, `GITHUB_TOKEN`, or `%USERPROFILE%\.dsh-qq-bot-token`.
+底层是 [tools/publish-github.mjs](../tools/publish-github.mjs)：通过 GitHub REST API 上传改动文件（无需安装 git），创建仓库、按需删除已移除文件（`--delete`），并且只把**当前版本**的市场索引钉到本次提交，旧版本保持各自的发布快照。token 读取顺序：`--token` → `GITHUB_TOKEN` → `%USERPROFILE%\.dsh-qq-bot-token`。
 
-Add the published `market-index.json` URL (or its jsDelivr mirror, `https://cdn.jsdelivr.net/gh/owner/dsh-qq-bot@main/market-index.json`) as an index in **Settings → Plugins → Discover** so other users can install the plugin from the market. The same file documents the only required step for an update: bump `version` in `package.json`, add a `versions` entry, run the publish script.
+把发布后的 `market-index.json` 地址（或 jsDelivr 镜像 `https://cdn.jsdelivr.net/gh/owner/dsh-qq-bot@main/market-index.json`）加到 **设置 → 插件 → Discover** 的索引里，其他用户就能在市场里安装。
 
-## Requirements and limitations
+## 限制
 
-- A running OneBot v11 implementation is required; the plugin never logs in to QQ itself.
-- The Harness Host must be running. Messages sent while it is closed are not queued by QQ.
-- The bot agent holds the session's write handle, so opening that session in the Web UI can fail with `session/writer-held` until the agent is disposed (`/new`, `/reload`, or the idle timeout).
-- Approval requests that nobody answers are rejected after `approvalTimeoutSeconds`.
-- Voice messages are not transcribed; video, card, and XML/JSON messages become text placeholders.
-- A group message with no @ is ignored when `groupMentionRequired` is on, but it is still not stored anywhere.
-- Diagnostic output is appended to `.qq-bot/bridge.log` in the profile directory.
+- 需要运行中的 OneBot v11 实现；插件本身不登录 QQ。
+- Harness 必须在运行；关闭期间 QQ 消息不会排队。
+- 机器人代理持有会话写锁，网页端打开同一会话可能报 `session/writer-held`，需等代理释放（`/new`、`/reload` 或空闲超时）。
+- 授权请求无人应答时，超时后按拒绝处理。
+- 语音不转写；视频、卡片、XML/JSON 消息会变成文字占位。
+- 开启 `groupMentionRequired` 时，群里不带 @ 的消息会被忽略，也不会存入任何地方。
+- 诊断日志写在 profile 目录的 `.qq-bot/bridge.log`。
