@@ -1,0 +1,29 @@
+{
+  "name": "@local/dsh-qq-bot",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "description": "QQ bot bridge for DeepSeek Harness: OneBot v11 / NapCat bot, one persistent DSH session per QQ chat.",
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "impl.js",
+    "onebot.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "docs",
+    "tools",
+    "安装NapCat.cmd",
+    "icon.svg",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
