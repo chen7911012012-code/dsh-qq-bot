@@ -62,12 +62,18 @@ https://cdn.jsdelivr.net/gh/chen7911012012-code/dsh-qq-bot@main/market-index.jso
 
 ## 发布更新
 
+**每次改动这个插件都要同步发布到 GitHub**（约定见 [AGENTS.md](AGENTS.md)）。一条命令完成升版本、写 CHANGELOG、更新市场索引、提交并打 release：
+
 ```powershell
-$env:GITHUB_TOKEN = '<具备 repo 权限的 token>'
-node tools/publish-github.mjs --repo owner/dsh-qq-bot --message "release: 1.1.1"
+cd qq-bot
+node tools/release.mjs --repo chen7911012012-code/dsh-qq-bot --bump patch --note "本次改了什么"
 ```
 
-脚本通过 GitHub REST API 上传改动过的文件（无需安装 git），并把 `market-index.json` 重新钉到本次提交。
+- `--bump patch|minor|major`：语义化版本；不写 `--bump` 则发布当前版本（只改文档时用）。
+- `--no-release`：只提交、不打 tag。
+- token 读取顺序：`--token` → `GITHUB_TOKEN` / `GH_TOKEN` → `%USERPROFILE%\.dsh-qq-bot-token`。
+
+底层工具是 [tools/publish-github.mjs](tools/publish-github.mjs)：通过 GitHub REST API 上传改动过的文件（无需安装 git），只把**当前版本**的市场索引钉到本次提交，旧版本保持各自的发布快照。
 
 ## 已知限制
 
