@@ -1,0 +1,29 @@
+- insert:
+    - id: qq-bot
+      name: '@local/dsh-qq-bot'
+      config:
+        wsUrl: 'ws://127.0.0.1:3001'
+        accessToken: ''
+        workdir: ''
+        allowedUsers: []
+        allowedGroups: []
+        groupMentionRequired: true
+        approvalMode: ask-qq
+        idleTimeoutMinutes: 30
+        progressNoticeSeconds: 12
+        replyChunkSize: 1500
+        allowedTools: []
+        groupAnyone: true
+        owner: ''
+        napcatInstallDir: ''
+        napcatPort: 3001
+        groupSessionTools:
+          - read
+          - glob
+          - grep
+          - read_image
+          - web_search
+          - web_fetch
+        provider: ''
+        model: ''
+        preset: ''
