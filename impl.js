@@ -33,7 +33,10 @@ const DEFAULTS = {
   replyChunkSize: 1500,
   allowedTools: [],
   groupAnyone: true,
+  quoteContext: true,
   owner: '',
+  repo: 'chen7911012012-code/dsh-qq-bot',
+  creatorMode: false,
   napcatInstallDir: '',
   napcatPort: 3001,
   groupSessionTools: ['read', 'glob', 'grep', 'read_image', 'web_search', 'web_fetch'],
@@ -61,7 +64,12 @@ function normalizeConfig(raw) {
     allowedTools: list(config.allowedTools),
     groupSessionTools: list(config.groupSessionTools),
     groupAnyone: config.groupAnyone !== false,
+    quoteContext: config.quoteContext !== false,
     owner: typeof config.owner === 'string' ? config.owner.trim() : '',
+    repo: typeof config.repo === 'string' && /^[^/\s]+\/[^/\s]+$/u.test(config.repo.trim())
+      ? config.repo.trim()
+      : DEFAULTS.repo,
+    creatorMode: config.creatorMode === true,
     napcatInstallDir: typeof config.napcatInstallDir === 'string' ? config.napcatInstallDir.trim() : '',
     napcatPort: clamp(Number(config.napcatPort), 1, 65535, 3001),
     groupMentionRequired: config.groupMentionRequired !== false,
@@ -100,6 +108,36 @@ function chunkText(text, limit) {
 function shortError(error) {
   const message = error instanceof Error ? error.message : String(error)
   return message.length > 400 ? `${message.slice(0, 400)}…` : message
+}
+
+/** Read this package's manifest, for the local version. */
+function readManifest() {
+  try {
+    return JSON.parse(fs.readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8'))
+  } catch {
+    return { name: '@local/dsh-qq-bot', version: '0.0.0' }
+  }
+}
+
+/** Compare dotted versions; positive when the left one is newer. */
+function compareVersions(left, right) {
+  const parts = (value) => String(value).replace(/^v/iu, '').split(/[.+-]/u).map((piece) => Number.parseInt(piece, 10) || 0)
+  const a = parts(left)
+  const b = parts(right)
+  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+    const diff = (a[index] ?? 0) - (b[index] ?? 0)
+    if (diff !== 0) return diff
+  }
+  return 0
+}
+
+/** Fetch one GitHub API document. */
+async function githubJson(url) {
+  const response = await fetch(url, {
+    headers: { 'user-agent': 'dsh-qq-bot', accept: 'application/vnd.github+json' },
+  })
+  if (!response.ok) throw new Error(`GitHub HTTP ${String(response.status)}`)
+  return await response.json()
 }
 
 export function apply(ctx, rawConfig) {
@@ -152,6 +190,41 @@ export function apply(ctx, rawConfig) {
       return writeOverride(overridePath, patch)
     },
 
+    /** Read the newest GitHub release of this plugin. */
+    async checkUpdate() {
+      const manifest = readManifest()
+      const release = await githubJson(`https://api.github.com/repos/${config.repo}/releases/latest`)
+      const version = String(release.tag_name ?? '').replace(/^v/iu, '')
+      return {
+        current: String(manifest.version),
+        latest: version,
+        hasUpdate: compareVersions(version, manifest.version) > 0,
+        notes: String(release.body ?? '').slice(0, 2000),
+        url: String(release.html_url ?? ''),
+        publishedAt: String(release.published_at ?? ''),
+      }
+    },
+
+    /** Install the newest release through the DSH plugin manager. */
+    async applyUpdate() {
+      const manifest = readManifest()
+      const info = await this.checkUpdate()
+      if (!info.hasUpdate) return { ok: true, message: `已是最新版本 ${info.current}`, spec: '' }
+      const commit = await githubJson(`https://api.github.com/repos/${config.repo}/commits/${encodeURIComponent(`v${info.latest}`)}`)
+      const sha = String(commit.sha ?? '')
+      if (!/^[0-9a-f]{40}$/u.test(sha)) return { ok: false, message: '无法解析该版本的提交', spec: '' }
+      const spec = `git+https://github.com/${config.repo}.git#${sha}`
+      const manager = ctx.get?.('pluginManager')
+      if (manager === undefined) return { ok: false, message: '当前环境没有 pluginManager，请手动安装', spec }
+      const result = await manager.installBundle(spec, { expected: { name: manifest.name, version: info.latest } })
+      const application = String(result?.application ?? 'unknown')
+      return {
+        ok: application === 'applied' || application === 'restart-required',
+        message: `新版本 ${info.latest} 安装结果：${application}`,
+        spec,
+      }
+    },
+
     chatKeyFor(event) {
       return event.message_type === 'group'
         ? `group-${event.group_id}`
@@ -193,6 +266,7 @@ export function apply(ctx, rawConfig) {
       const segments = Array.isArray(event.message) ? event.message : []
       const parts = []
       let mentioned = false
+      let replyId
       for (const segment of segments) {
         const type = segment?.type
         const data = segment?.data ?? {}
@@ -209,7 +283,7 @@ export function apply(ctx, rawConfig) {
           const note = await this.downloadMedia(data, 'file')
           parts.push(note)
         } else if (type === 'reply') {
-          continue
+          replyId = data.id
         } else if (type === 'face') {
           continue
         } else if (type === 'record') {
@@ -220,7 +294,48 @@ export function apply(ctx, rawConfig) {
           parts.push(`[${type} 卡片消息]`)
         }
       }
+      if (config.quoteContext && replyId !== undefined && replyId !== '') {
+        const quoted = await this.readQuoted(replyId)
+        if (quoted !== '') parts.unshift(quoted)
+      }
       return { mentioned, text: parts.join('').trim() }
+    },
+
+    /**
+     * Resolve a quoted (replied-to) message and turn its text and media into
+     * context, so "@bot 看看这张图" with a reply works in groups.
+     * @param replyId - the OneBot message id carried by the reply segment.
+     * @returns a bracketed context line, or an empty string when unusable.
+     */
+    async readQuoted(replyId) {
+      let quoted
+      try {
+        const numeric = Number(replyId)
+        quoted = await client.call('get_msg', { message_id: Number.isSafeInteger(numeric) ? numeric : replyId }, 15_000)
+      } catch (error) {
+        log(`quoted message ${String(replyId)} unavailable: ${shortError(error)}`)
+        return '[引用的消息读取失败]'
+      }
+      const segments = Array.isArray(quoted?.message) ? quoted.message : []
+      if (segments.length === 0) return '[引用的消息内容为空]'
+      const sender = String(quoted?.sender?.card || quoted?.sender?.nickname || quoted?.sender?.user_id || quoted?.user_id || '某人')
+      const pieces = []
+      for (const segment of segments) {
+        const type = segment?.type
+        const data = segment?.data ?? {}
+        if (type === 'text') pieces.push(String(data.text ?? ''))
+        else if (type === 'image') pieces.push(await this.downloadMedia(data, 'image'))
+        else if (type === 'file') pieces.push(await this.downloadMedia(data, 'file'))
+        else if (type === 'face' || type === 'reply') continue
+        else if (type === 'video') pieces.push('[视频]')
+        else if (type === 'record') pieces.push('[语音]')
+      }
+      const body = pieces.join('').replace(/\s+/gu, ' ').trim()
+      const clipped = body.length > 800 ? `${body.slice(0, 800)}…` : body
+      log(`quoted message from ${sender} resolved (${segments.length} segments)`)
+      return clipped === ''
+        ? `[引用了 ${sender} 的一条消息，没有可读内容]`
+        : `[引用了 ${sender} 的消息：${clipped}]`
     },
 
     async downloadMedia(data, kind) {
@@ -522,7 +637,7 @@ export function apply(ctx, rawConfig) {
       const [rawCommand, ...rest] = content.slice(1).split(/\s+/)
       const command = rawCommand.toLowerCase()
       const chat = chats.get(key)
-      const ownerOnly = new Set(['new', 'reset', 'stop', 'status', 'reload'])
+      const ownerOnly = new Set(['new', 'reset', 'stop', 'status', 'reload', 'update', 'publish'])
       if (ownerOnly.has(command) && !this.isOwner(event)) {
         await this.send(event, '这条命令只有主人可以用。主人在私聊里发 /owner 设置。')
         return true
@@ -555,10 +670,53 @@ export function apply(ctx, rawConfig) {
         return true
       }
 
+      if (command === 'update') {
+        const action = (rest[0] ?? '').toLowerCase()
+        try {
+          if (action === 'apply' || action === 'install') {
+            await this.send(event, '正在安装更新，请稍候…')
+            const result = await this.applyUpdate()
+            await this.send(event, result.ok
+              ? `更新完成：${result.message}`
+              : `更新失败：${result.message}${result.spec === '' ? '' : `\n安装参数：${result.spec}`}`)
+            return true
+          }
+          const info = await this.checkUpdate()
+          await this.send(event, info.hasUpdate
+            ? `发现新版本 ${info.latest}（当前 ${info.current}）\n\n${info.notes === '' ? '（无更新说明）' : info.notes}\n\n回复 /update apply 安装。`
+            : `已是最新版本 ${info.current}。`)
+        } catch (error) {
+          await this.send(event, `检查更新失败：${shortError(error)}`)
+        }
+        return true
+      }
+
+      if (command === 'publish') {
+        if (!config.creatorMode) {
+          await this.send(event, '当前不是创作者模式，未启用发布命令。')
+          return true
+        }
+        const note = rest.join(' ').trim()
+        await this.send(event, '正在发布到 GitHub，请稍候…')
+        try {
+          const script = fileURLToPath(new URL('./tools/release.mjs', import.meta.url))
+          const argv = [script, '--repo', config.repo, '--bump', 'patch']
+          if (note !== '') argv.push('--note', note)
+          const output = await runProcess(process.execPath, argv, undefined, { ...process.env, ELECTRON_RUN_AS_NODE: '1' })
+          const tail = output.text.slice(-700)
+          await this.send(event, output.code === 0 ? `发布成功：\n${tail}` : `发布失败：\n${tail}`)
+        } catch (error) {
+          await this.send(event, `发布出错：${shortError(error)}`)
+        }
+        return true
+      }
+
       if (command === 'help' || command === '?') {
         await this.send(event, [
           '可用命令：',
           '/owner [QQ号] 查看或设置主人（私聊）',
+          '/update 检查 GitHub 上的新版本；/update apply 安装',
+          ...config.creatorMode ? ['/publish <说明> 发布新版本到 GitHub（创作者）'] : [],
           '/new 开启新会话（仅主人）',
           '/status 查看会话状态（仅主人）',
           '/reload 从磁盘重新加载当前会话（仅主人）',
@@ -778,6 +936,122 @@ export function apply(ctx, rawConfig) {
       return () => {}
     }
   }, 'qqBot.tools')
+
+  // 更新：检查 GitHub Release、按需安装；发布只在创作者模式注册。
+  ctx.effect(() => {
+    const tools = ctx.get?.('tools')
+    if (tools === undefined) return () => {}
+    const manifest = readManifest()
+    const disposers = []
+
+    const register = (definition) => {
+      try {
+        disposers.push(tools.register(definition))
+      } catch (error) {
+        log(`tool ${definition.name} registration failed: ${shortError(error)}`)
+      }
+    }
+
+    register({
+      name: 'qqbot_check_update',
+      description: 'Check the plugin repository for a newer dsh-qq-bot release and report the version, notes, and whether an update is available.',
+      parameters: { type: 'object', properties: {}, additionalProperties: false },
+      output: {
+        schema: {
+          type: 'object',
+          properties: {
+            current: { type: 'string' },
+            latest: { type: 'string' },
+            hasUpdate: { type: 'boolean' },
+            notes: { type: 'string' },
+            url: { type: 'string' },
+          },
+          required: ['current', 'latest', 'hasUpdate', 'notes', 'url'],
+          additionalProperties: false,
+        },
+        render: (_args, value) => [{
+          type: 'text',
+          text: value.hasUpdate
+            ? `发现新版本 ${value.latest}（当前 ${value.current}）\n${value.notes}\n${value.url}`
+            : `已是最新版本 ${value.current}。`,
+        }],
+      },
+      timeoutMs: 60_000,
+      async execute() {
+        const info = await bridge.checkUpdate()
+        return { current: info.current, latest: info.latest, hasUpdate: info.hasUpdate, notes: info.notes, url: info.url }
+      },
+    })
+
+    register({
+      name: 'qqbot_apply_update',
+      description: 'Install the latest dsh-qq-bot release from its GitHub repository through the DSH plugin manager. Requires pnpm availability and may need a Harness restart.',
+      parameters: { type: 'object', properties: {}, additionalProperties: false },
+      output: {
+        schema: {
+          type: 'object',
+          properties: { ok: { type: 'boolean' }, message: { type: 'string' }, spec: { type: 'string' } },
+          required: ['ok', 'message', 'spec'],
+          additionalProperties: false,
+        },
+        render: (_args, value) => [{
+          type: 'text',
+          text: value.ok ? `更新完成：${value.message}` : `更新失败：${value.message}\n可用安装参数：${value.spec || '(无)'}`,
+        }],
+      },
+      timeoutMs: 600_000,
+      async execute() {
+        return await bridge.applyUpdate()
+      },
+    })
+
+    if (config.creatorMode) {
+      register({
+        name: 'qqbot_publish_release',
+        description: 'Creator only: bump the version, update the changelog and market index, commit to GitHub and publish a release for dsh-qq-bot.',
+        parameters: {
+          type: 'object',
+          properties: {
+            note: { type: 'string', description: '一句话说明这次改了什么' },
+            bump: { type: 'string', enum: ['patch', 'minor', 'major'], description: '版本幅度，默认 patch' },
+          },
+          additionalProperties: false,
+        },
+        output: {
+          schema: {
+            type: 'object',
+            properties: { ok: { type: 'boolean' }, output: { type: 'string' } },
+            required: ['ok', 'output'],
+            additionalProperties: false,
+          },
+          render: (_args, value) => [{ type: 'text', text: value.output }],
+        },
+        timeoutMs: 900_000,
+        async execute(args, exec) {
+          const script = fileURLToPath(new URL('./tools/release.mjs', import.meta.url))
+          const argv = [script, '--repo', config.repo, '--bump', String(args?.bump ?? 'patch')]
+          if (typeof args?.note === 'string' && args.note.trim() !== '') argv.push('--note', args.note.trim())
+          const output = await runProcess(process.execPath, argv, exec?.signal, {
+            ...process.env,
+            ELECTRON_RUN_AS_NODE: '1',
+          })
+          return { ok: output.code === 0, output: output.text }
+        },
+      })
+    }
+
+    const cleanup = () => {
+      for (const dispose of disposers) {
+        try {
+          dispose?.()
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    log(`registered update tools (creatorMode=${String(config.creatorMode)})`)
+    return cleanup
+  }, 'qqBot.updateTools')
 
   ctx.effect(() => () => {
     client?.close()
