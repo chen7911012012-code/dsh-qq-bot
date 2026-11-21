@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "QQ bot bridge",
+    "description": "Connects a QQ bot through OneBot v11 (NapCat) and gives every QQ user or group its own persistent DeepSeek Harness session.",
+    "detail": "docs/DETAIL.md"
+  }
+}
