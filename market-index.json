@@ -46,7 +46,13 @@
       },
       "metadata": {
         "category": "chat",
-        "keywords": ["qq", "qqbot", "onebot", "napcat", "bot"]
+        "keywords": [
+          "qq",
+          "qqbot",
+          "onebot",
+          "napcat",
+          "bot"
+        ]
       },
       "versions": [
         {
@@ -58,7 +64,7 @@
           "source": {
             "type": "git",
             "url": "https://github.com/chen7911012012-code/dsh-qq-bot",
-            "commit": "0000000000000000000000000000000000000000"
+            "commit": "58f70d1fca192bc7761c8eeec00b47703a1bcbab"
           }
         }
       ]
