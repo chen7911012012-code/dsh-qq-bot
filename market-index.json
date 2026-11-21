@@ -56,6 +56,18 @@
       },
       "versions": [
         {
+          "version": "1.2.0",
+          "publishTimestamp": 1795258563,
+          "engines": {
+            "dsh": ">=0.2.2-rc.1"
+          },
+          "source": {
+            "type": "git",
+            "url": "https://github.com/chen7911012012-code/dsh-qq-bot",
+            "commit": "0000000000000000000000000000000000000000"
+          }
+        },
+        {
           "version": "1.1.2",
           "publishTimestamp": 1795254308,
           "engines": {
