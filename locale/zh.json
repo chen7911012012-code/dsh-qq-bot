@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "QQ 机器人桥接",
+    "description": "通过 OneBot v11（NapCat）接入 QQ 机器人，每个 QQ 用户或群聊对应一个独立的、可持久化的 DeepSeek Harness 会话。",
+    "detail": "docs/DETAIL.md"
+  }
+}
