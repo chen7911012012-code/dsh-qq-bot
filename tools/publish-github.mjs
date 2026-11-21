@@ -198,11 +198,14 @@ async function main() {
       const head = await request(token, 'GET', `/repos/${owner}/${name}/commits/main`)
       const sha = head?.sha
       if (typeof sha === 'string' && /^[0-9a-f]{40}$/u.test(sha)) {
+        const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
         const index = JSON.parse(fs.readFileSync(indexFile, 'utf8'))
         let changed = false
         for (const plugin of index.plugins ?? []) {
           for (const version of plugin.versions ?? []) {
-            if (version?.source?.type === 'git' && version.source.commit !== sha) {
+            // Only the version being published points at this commit; older
+            // entries keep the tree they were released from.
+            if (version?.source?.type === 'git' && version.version === pkg.version && version.source.commit !== sha) {
               version.source.commit = sha
               changed = true
             }
@@ -260,7 +263,7 @@ async function main() {
       await request(token, 'POST', `/repos/${owner}/${name}/releases`, {
         tag_name: tag,
         target_commitish: head.sha,
-        name: `${pkg.name} ${tag}`,
+        name: `dsh-qq-bot ${tag}`,
         body,
         draft: false,
         prerelease: false,
