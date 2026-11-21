@@ -1,5 +1,9 @@
 # 更新记录
 
+## 1.1.1 — 2026-11-21
+
+- 新增一键发布脚本 tools/release.mjs 与 AGENTS.md 自动同步约定：以后每次改动都会自动提交并打 release。
+
 ## 1.1.0 — 2026-11-21
 
 - **一键安装 NapCat**：新增代理工具 `qqbot_install_napcat` 与 `安装NapCat.cmd`，可自动下载 NapCat Shell、写入 OneBot v11 配置、注册登录自启计划任务、清理抢占登录的普通 QQ 自启项并启动。
